@@ -1,0 +1,310 @@
+#include <iostream>
+#include <vector>
+#include <map>
+#include <string>
+#include <memory>
+#include <stdexcept>
+using namespace std;
+
+
+class UniversitySystemException : public exception {
+    string message;
+public:
+    UniversitySystemException(const string& msg) : message(msg) {}
+    const char* what() const noexcept override { return message.c_str(); }
+};
+
+class EnrollmentException : public UniversitySystemException {
+public:
+    EnrollmentException(const string& msg) : UniversitySystemException(msg) {}
+};
+
+class GradeException : public UniversitySystemException {
+public:
+    GradeException(const string& msg) : UniversitySystemException(msg) {}
+};
+
+class PaymentException : public UniversitySystemException {
+public:
+    PaymentException(const string& msg) : UniversitySystemException(msg) {}
+};
+
+
+class Person {
+protected:
+    int id;
+    string name, email;
+public:
+    Person(int id, string name, string email) : id(id), name(name), email(email) {}
+    virtual void displayDetails() const = 0;
+    virtual double calculatePayment() const = 0;
+    virtual ~Person() {}
+};
+
+
+class Student : public Person {
+protected:
+    vector<string> enrolledCourses;
+public:
+    Student(int id, string name, string email) : Person(id, name, email) {}
+    void enroll(const string& course) {
+        enrolledCourses.push_back(course);
+    }
+};
+
+class UndergraduateStudent : public Student {
+    string major, minor, gradDate;
+public:
+    UndergraduateStudent(int id, string name, string email, string major, string minor, string gradDate)
+        : Student(id, name, email), major(major), minor(minor), gradDate(gradDate) {}
+    void displayDetails() const override {
+        cout << "Undergraduate Student: " << name << ", Major: " << major << ", Graduation: " << gradDate << endl;
+    }
+    double calculatePayment() const override {
+        return 1000.0;
+    }
+};
+
+class GraduateStudent : public Student {
+    string topic, advisorName, thesis;
+public:
+    GraduateStudent(int id, string name, string email, string topic, string advisor, string thesis)
+        : Student(id, name, email), topic(topic), advisorName(advisor), thesis(thesis) {}
+    void displayDetails() const override {
+        cout << "Graduate Student: " << name << ", Thesis: " << thesis << endl;
+    }
+    double calculatePayment() const override {
+        return 1500.0;
+    }
+};
+
+
+class Professor : public Person {
+protected:
+    int years;
+public:
+    Professor(int id, string name, string email, int years) : Person(id, name, email), years(years) {}
+};
+
+class AssistantProfessor : public Professor {
+public:
+    AssistantProfessor(int id, string name, string email, int years) : Professor(id, name, email, years) {}
+    void displayDetails() const override {
+        cout << "Assistant Professor: " << name << ", Years: " << years << endl;
+    }
+    double calculatePayment() const override {
+        return 3000 + 100 * years;
+    }
+};
+
+class AssociateProfessor : public Professor {
+public:
+    AssociateProfessor(int id, string name, string email, int years) : Professor(id, name, email, years) {}
+    void displayDetails() const override {
+        cout << "Associate Professor: " << name << ", Years: " << years << endl;
+    }
+    double calculatePayment() const override {
+        return 4000 + 150 * years;
+    }
+};
+
+class FullProfessor : public Professor {
+public:
+    FullProfessor(int id, string name, string email, int years) : Professor(id, name, email, years) {}
+    void displayDetails() const override {
+        cout << "Full Professor: " << name << ", Years: " << years << endl;
+    }
+    double calculatePayment() const override {
+        return 5000 + 200 * years;
+    }
+};
+
+
+class Course {
+    string code, title;
+    shared_ptr<Professor> instructor;
+    vector<shared_ptr<Student>> students;
+public:
+    Course(string code, string title) : code(code), title(title) {}
+    void assignInstructor(shared_ptr<Professor> prof) { instructor = prof; }
+    void enrollStudent(shared_ptr<Student> student) {
+        if (students.size() >= 30) throw EnrollmentException("Course is full");
+        students.push_back(student);
+    }
+    string getCode() const { return code; }
+};
+
+class Department {
+    string name;
+    vector<shared_ptr<Professor>> profs;
+    vector<shared_ptr<Course>> courses;
+public:
+    Department(string name) : name(name) {}
+    void addProfessor(shared_ptr<Professor> prof) { profs.push_back(prof); }
+    void addCourse(shared_ptr<Course> course) { courses.push_back(course); }
+};
+
+
+class GradeBook {
+    map<pair<int, string>, double> gradeMap;
+public:
+    void assignGrade(int studentId, const string& courseCode, double grade) {
+        if (grade < 0 || grade > 100) throw GradeException("Invalid grade value");
+        gradeMap[{studentId, courseCode}] = grade;
+    }
+
+    double getGrade(int studentId, const string& courseCode) {
+        auto key = make_pair(studentId, courseCode);
+        if (gradeMap.find(key) == gradeMap.end()) throw GradeException("Grade not found");
+        return gradeMap[key];
+    }
+};
+
+// Schedule
+struct TimeSlot {
+    string day;
+    string time;
+};
+
+class Schedule {
+    struct Entry {
+        shared_ptr<Course> course;
+        TimeSlot slot;
+        string room;
+    };
+    vector<Entry> entries;
+public:
+    void assignCourse(shared_ptr<Course> course, TimeSlot slot, const string& room) {
+        for (const auto& e : entries) {
+            if (e.room == room && e.slot.day == slot.day && e.slot.time == slot.time)
+                throw UniversitySystemException("Classroom conflict");
+        }
+        entries.push_back({course, slot, room});
+    }
+};
+
+
+class UniversitySystem {
+    vector<shared_ptr<Department>> departments;
+    vector<shared_ptr<Student>> students;
+    vector<shared_ptr<Professor>> professors;
+    vector<shared_ptr<Course>> courses;
+    GradeBook gradebook;
+    Schedule schedule;
+public:
+    void menu() {
+        int choice;
+        do {
+            cout << "\n--- University Management Menu ---\n";
+            cout << "1. Add Department\n2. Add Professor\n3. Add Course\n4. Add Student\n5. Enroll Student\n6. Assign Grade\n7. Display Student Details\n8. Display Professor Details\n9. Exit\nChoice: ";
+            cin >> choice;
+            switch (choice) {
+                case 1: addDepartment(); break;
+                case 2: addProfessor(); break;
+                case 3: addCourse(); break;
+                case 4: addStudent(); break;
+                case 5: enrollStudent(); break;
+                case 6: assignGrade(); break;
+                case 7: displayStudentDetails(); break;
+                case 8: displayProfessorDetails(); break;
+                case 9: cout << "Exiting..." << endl; break;
+                default: cout << "Invalid choice." << endl;
+            }
+        } while (choice != 9);
+    }
+
+    void addDepartment() {
+        string name;
+        cout << "Enter department name: ";
+        cin.ignore(); getline(cin, name);
+        departments.push_back(make_shared<Department>(name));
+    }
+
+    void addProfessor() {
+        int id, years;
+        string name, email;
+        cout << "Enter professor id, name, email, years of service: ";
+        cin >> id >> ws; getline(cin, name); getline(cin, email); cin >> years;
+        auto prof = make_shared<FullProfessor>(id, name, email, years);
+        professors.push_back(prof);
+    }
+
+    void addCourse() {
+        string code, title;
+        cout << "Enter course code and title: ";
+        cin >> code >> ws; getline(cin, title);
+        auto course = make_shared<Course>(code, title);
+        courses.push_back(course);
+    }
+
+    void addStudent() {
+        int id; string name, email;
+        cout << "Enter student id, name, email: ";
+        cin >> id >> ws; getline(cin, name); getline(cin, email);
+        auto student = make_shared<UndergraduateStudent>(id, name, email, "CS", "Math", "2026");
+        students.push_back(student);
+    }
+
+    void enrollStudent() {
+        int sid; string code;
+        cout << "Enter student id and course code: ";
+        cin >> sid >> code;
+        for (auto& s : students) {
+            if (s->calculatePayment() == 1000.0 && s->calculatePayment() != 0) {
+                for (auto& c : courses) {
+                    if (c->getCode() == code) {
+                        c->enrollStudent(s);
+                        cout << "Enrolled successfully." << endl;
+                        return;
+                    }
+                }
+            }
+        }
+        throw EnrollmentException("Enrollment failed");
+    }
+
+    void assignGrade() {
+        int sid; string code; double grade;
+        cout << "Enter student id, course code, and grade: ";
+        cin >> sid >> code >> grade;
+        gradebook.assignGrade(sid, code, grade);
+    }
+
+    void displayStudentDetails() {
+        for (auto& s : students) s->displayDetails();
+    }
+
+    void displayProfessorDetails() {
+        for (auto& p : professors) p->displayDetails();
+    }
+};
+
+int main() {
+    try {
+        UniversitySystem us;
+        us.menu();
+    } catch (UniversitySystemException& e) {
+        cerr << "Error: " << e.what() << endl;
+    }
+    return 0;
+}
+
+
+
+
+   
+
+
+  
+   
+
+
+
+    
+
+
+  
+
+
+   
+}
